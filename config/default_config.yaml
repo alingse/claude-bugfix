@@ -9,7 +9,7 @@ llm:
 
 # Agent Configuration
 agent:
-  max_iterations: 20
+  max_iterations: 100
   max_tool_calls_per_iteration: 5
   enable_verbose_logging: false
 
