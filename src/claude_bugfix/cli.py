@@ -30,6 +30,7 @@ from claude_bugfix.tools.file_operations import (
     ListFilesTool,
     ReplaceInFileTool,
     SearchCodebaseTool,
+    BashTool,
 )
 from claude_bugfix.utils.logger import setup_logger
 
@@ -82,6 +83,10 @@ def create_tool_registry(config: dict) -> ToolRegistry:
             max_results=max_search_results,
         )
     )
+    
+    # Register bash tool with default timeout
+    bash_timeout = config.get("bash", {}).get("timeout", 60)
+    registry.register(BashTool(timeout=bash_timeout))
 
     return registry
 
@@ -102,6 +107,12 @@ def format_tool_args(tool_name: str, tool_args: dict) -> str:
         return f"🔍 搜索代码: '{tool_args.get('search_text', '')}'"
     elif tool_name == "replace_in_file":
         return f"🔄 替换内容: {tool_args.get('file_path', 'unknown')}"
+    elif tool_name == "bash":
+        command = tool_args.get('command', 'unknown')
+        description = tool_args.get('description', '')
+        if description:
+            return f"⚡ 执行命令: {command} ({description})"
+        return f"⚡ 执行命令: {command}"
     else:
         return f"🔧 {tool_name}: {tool_args}"
 
@@ -155,6 +166,37 @@ def display_tool_result(tool_name: str, result):
             else:
                 console.print(f"[cyan]{line}[/cyan]")
         console.print("[dim]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/dim]")
+    elif tool_name == "bash":
+        # Display bash command result
+        console.print("[dim]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/dim]")
+        lines = str(data).split('\n')
+        in_stdout = False
+        in_stderr = False
+        for line in lines:
+            if line.startswith("Command:"):
+                console.print(f"[cyan]命令:[/cyan] [yellow]{line.replace('Command: ', '')}[/yellow]")
+            elif line.startswith("Exit code:"):
+                code = line.replace('Exit code: ', '')
+                if code == '0':
+                    console.print(f"[cyan]退出码:[/cyan] [green]{code}[/green]")
+                else:
+                    console.print(f"[cyan]退出码:[/cyan] [red]{code}[/red]")
+            elif line.startswith("--- STDOUT ---"):
+                in_stdout = True
+                in_stderr = False
+                console.print("[dim]--- 标准输出 ---[/dim]")
+            elif line.startswith("--- STDERR ---"):
+                in_stdout = False
+                in_stderr = True
+                console.print("[dim]--- 标准错误 ---[/dim]")
+            else:
+                if in_stdout:
+                    console.print(f"  {line}")
+                elif in_stderr:
+                    console.print(f"  [yellow]{line}[/yellow]")
+                else:
+                    console.print(f"[dim]{line}[/dim]")
+        console.print("[dim]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/dim]")
     else:
         # Default display
         console.print("[dim]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/dim]")
@@ -174,7 +216,7 @@ def create_action_callback(yolo_mode: bool = False):
     # Tools that don't need confirmation in normal mode
     readonly_tools = {'read_file', 'search_codebase', 'list_files'}
     # Tools that always need confirmation in normal mode
-    write_tools = {'write_file', 'replace_in_file'}
+    write_tools = {'write_file', 'replace_in_file', 'bash'}
 
     def callback(action: AgentAction) -> bool:
         nonlocal skip_confirmations

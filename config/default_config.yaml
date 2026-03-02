@@ -40,6 +40,20 @@ file_operations:
     - ".DS_Store"
   search_max_results: 100
 
+# Bash Command Configuration
+bash:
+  # Default timeout for bash commands (seconds)
+  timeout: 60
+  # List of blocked dangerous commands (optional)
+  # blocked_commands:
+  #   - "rm -rf /"
+  #   - "format"
+  # List of allowed commands only (whitelist mode, optional)
+  # allowed_commands:
+  #   - "ls"
+  #   - "cat"
+  #   - "echo"
+
 # Diff Display
 diff:
   context_lines: 3

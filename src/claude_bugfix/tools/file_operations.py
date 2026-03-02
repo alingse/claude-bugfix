@@ -1,6 +1,8 @@
 """File operation tools for the agent."""
 
+import asyncio
 import os
+import shlex
 from pathlib import Path
 from typing import List, Optional
 
@@ -340,3 +342,175 @@ class SearchCodebaseTool(Tool):
             return ToolResult(success=True, data=summary)
         except Exception as e:
             return ToolResult(success=False, error=f"Failed to search codebase: {str(e)}")
+
+
+class BashTool(Tool):
+    """Tool to execute bash commands."""
+
+    def __init__(
+        self,
+        timeout: int = 60,
+        allowed_commands: Optional[List[str]] = None,
+        blocked_commands: Optional[List[str]] = None,
+        working_directory: Optional[str] = None,
+    ):
+        super().__init__()
+        self.timeout = timeout
+        self.allowed_commands = set(allowed_commands) if allowed_commands else None
+        self.blocked_commands = set(blocked_commands) if blocked_commands else {
+            "rm -rf /",
+            "rm -rf /*",
+            "> /dev/sda",
+            "dd if=/dev/zero",
+            "mkfs",
+            "format",
+            "shutdown",
+            "reboot",
+            "halt",
+            "poweroff",
+        }
+        self.working_directory = working_directory or os.getcwd()
+
+    @property
+    def name(self) -> str:
+        return "bash"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Execute a bash command. Use this to run tests, build commands, "
+            "check git status, or perform system operations. "
+            "Commands run with a timeout and security restrictions."
+        )
+
+    @property
+    def parameters(self) -> List[ToolParameter]:
+        return [
+            ToolParameter(
+                name="command",
+                type="string",
+                description="The bash command to execute",
+                required=True,
+            ),
+            ToolParameter(
+                name="cwd",
+                type="string",
+                description="Working directory for the command (default: current directory)",
+                required=False,
+            ),
+            ToolParameter(
+                name="timeout",
+                type="integer",
+                description=f"Timeout in seconds (default: {self.timeout})",
+                required=False,
+            ),
+            ToolParameter(
+                name="description",
+                type="string",
+                description="Optional description of what the command does",
+                required=False,
+            ),
+        ]
+
+    def _is_command_safe(self, command: str) -> bool:
+        """Check if the command is safe to execute."""
+        # Check blocked commands
+        if self.blocked_commands:
+            for blocked in self.blocked_commands:
+                if blocked in command.lower():
+                    return False
+        
+        # Check allowed commands whitelist
+        if self.allowed_commands:
+            # Parse the command to get the main command
+            try:
+                parsed = shlex.split(command)
+                if parsed:
+                    main_cmd = parsed[0]
+                    if main_cmd not in self.allowed_commands:
+                        return False
+            except ValueError:
+                pass
+        
+        return True
+
+    async def execute(
+        self,
+        command: str,
+        cwd: Optional[str] = None,
+        timeout: Optional[int] = None,
+        description: Optional[str] = None,
+    ) -> ToolResult:
+        """Execute the bash command."""
+        try:
+            # Validate command safety
+            if not self._is_command_safe(command):
+                return ToolResult(
+                    success=False,
+                    error=f"Command blocked for security reasons: {command}",
+                )
+
+            # Determine working directory
+            work_dir = cwd or self.working_directory
+            work_dir = os.path.abspath(work_dir)
+
+            # Ensure working directory exists
+            if not os.path.exists(work_dir):
+                return ToolResult(
+                    success=False,
+                    error=f"Working directory does not exist: {work_dir}",
+                )
+
+            # Use provided timeout or default
+            cmd_timeout = timeout or self.timeout
+
+            # Execute the command
+            process = await asyncio.create_subprocess_shell(
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=work_dir,
+            )
+
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(),
+                    timeout=cmd_timeout,
+                )
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+                return ToolResult(
+                    success=False,
+                    error=f"Command timed out after {cmd_timeout} seconds",
+                )
+
+            # Decode output
+            stdout_str = stdout.decode("utf-8", errors="replace") if stdout else ""
+            stderr_str = stderr.decode("utf-8", errors="replace") if stderr else ""
+
+            # Prepare result
+            result_lines = []
+            if description:
+                result_lines.append(f"Description: {description}")
+            result_lines.append(f"Command: {command}")
+            result_lines.append(f"Working directory: {work_dir}")
+            result_lines.append(f"Exit code: {process.returncode}")
+            
+            if stdout_str:
+                result_lines.append(f"\n--- STDOUT ---\n{stdout_str}")
+            if stderr_str:
+                result_lines.append(f"\n--- STDERR ---\n{stderr_str}")
+
+            result_text = "\n".join(result_lines)
+
+            if process.returncode == 0:
+                return ToolResult(success=True, data=result_text)
+            else:
+                return ToolResult(
+                    success=False,
+                    error=f"Command failed with exit code {process.returncode}\n{result_text}",
+                )
+
+        except Exception as e:
+            return ToolResult(success=False, error=f"Failed to execute command: {str(e)}")
