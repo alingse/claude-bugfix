@@ -1,0 +1,46 @@
+# Claude Bugfix Default Configuration
+
+# LLM Configuration
+llm:
+  model: "gpt-4"
+  temperature: 0.1
+  max_tokens: 4096
+  api_timeout: 60
+
+# Agent Configuration
+agent:
+  max_iterations: 20
+  max_tool_calls_per_iteration: 5
+  enable_verbose_logging: false
+
+# File Operation Limits
+file_operations:
+  max_file_size_mb: 10
+  excluded_directories:
+    - node_modules
+    - .git
+    - __pycache__
+    - .venv
+    - venv
+    - dist
+    - build
+    - .next
+    - .nuxt
+    - target
+    - vendor
+  excluded_patterns:
+    - "*.pyc"
+    - "*.pyo"
+    - "*.so"
+    - "*.dylib"
+    - "*.dll"
+    - "*.exe"
+    - "*.bin"
+    - "*.log"
+    - ".DS_Store"
+  search_max_results: 100
+
+# Diff Display
+diff:
+  context_lines: 3
+  syntax_highlighting: true
