@@ -93,7 +93,7 @@ class ContextCompressor:
     def check_and_compress(
         self, 
         messages: List[Dict[str, Any]], 
-        current_iteration: int,
+        iteration: int = 0,
         force_level: Optional[str] = None
     ) -> CompressionResult:
         """
@@ -111,7 +111,7 @@ class ContextCompressor:
         
         # Determine compression level
         level = self._determine_compression_level(
-            original_tokens, current_iteration, force_level
+            original_tokens, iteration, force_level
         )
         
         if level == 'none':
@@ -127,7 +127,7 @@ class ContextCompressor:
             )
         
         logger.info(f"Applying {level} compression to context "
-                   f"({original_tokens} est. tokens, iter {current_iteration})")
+                   f"({original_tokens} est. tokens, iter {iteration})")
         
         # Apply compression based on level
         if level == 'light':

@@ -14,6 +14,7 @@ AI-Powered Code Repair Agent – Your autonomous debugging assistant powered by 
 - ✅ **Safe Changes**: Shows diffs before applying any modifications
 - 🌐 **Language Agnostic**: Works with Python, JavaScript/TypeScript, Go, and more
 - 🔄 **Iterative Problem Solving**: Agent loop continues until solution is found
+- 📦 **Context Compression**: Automatically compresses conversation context when token usage is high or iterations exceed limits, allowing the agent to continue working on complex tasks
 
 ## Installation
 
@@ -196,7 +197,16 @@ Use it with: `claude-bugfix fix "bug description" --config my_config.yaml`
 - Requires OpenAI API access (costs apply)
 - Works best with well-structured codebases
 - May need multiple iterations for complex bugs
-- Limited by context window size
+- Limited by context window size (mitigated by automatic context compression)
+
+### Context Compression
+
+When the agent approaches token limits (64K) or maximum iterations (20), it automatically compresses conversation context by:
+- Summarizing early tool results
+- Extracting key findings and modified files
+- Preserving recent context for continuity
+
+This allows the agent to continue working on complex tasks that would otherwise exceed limits. See [docs/context_compression.md](docs/context_compression.md) for details.
 
 ## Contributing
 
